@@ -1,0 +1,14 @@
+Bootstrap: docker
+From: mambaorg/micromamba:latest
+
+
+%files
+    {{env.filename}} /{{env.base_filename}}
+
+%post
+    micromamba create -n {{env.name}} && \
+    micromamba install -n {{env.name}} --file /{{env.base_filename}} && \
+    micromamba clean --all --yes
+
+%runscript
+    micromamba run -n {{env.name}} "$@"

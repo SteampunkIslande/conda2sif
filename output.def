@@ -1,0 +1,14 @@
+Bootstrap: docker
+From: mambaorg/micromamba:latest
+
+
+%files
+    env.yaml /env.yaml
+
+%post
+    micromamba create -n bioinfo && \
+    micromamba install -n bioinfo --file /env.yaml && \
+    micromamba clean --all --yes
+
+%runscript
+    micromamba run -n bioinfo "$@"
