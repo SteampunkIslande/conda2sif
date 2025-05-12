@@ -1,14 +1,16 @@
 Bootstrap: docker
-From: mambaorg/micromamba:latest
+From: continuumio/miniconda3
 
+# Shout out to https://github.com/apptainer/singularity/issues/5075#issuecomment-972934341
 
 %files
-    {{env.filename}} /{{env.base_filename}}
+    {{ env.filename }}
 
 %post
-    micromamba create -n {{env.name}} && \
-    micromamba install -n {{env.name}} --file /{{env.base_filename}} && \
-    micromamba clean --all --yes
+    /opt/conda/bin/conda env create -n {{ env.env_name }} -f {{ env.filename }}
+    echo ". /opt/conda/etc/profile.d/conda.sh" >> /etc/bash.bashrc
+    echo "conda activate $(head -n 1 {{ env.filename }} | cut -f 2 -d ' ')" >> /etc/bash.bashrc
 
-%runscript
-    micromamba run -n {{env.name}} "$@"
+%environment
+    export SINGULARITY_SHELL=/bin/bash
+    export BASH_ENV=/etc/bash.bashrc
