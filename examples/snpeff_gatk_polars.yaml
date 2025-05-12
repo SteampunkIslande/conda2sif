@@ -1,0 +1,8 @@
+name: bioinfo
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - snpeff
+  - gatk
+  - uv

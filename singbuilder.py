@@ -9,7 +9,35 @@ import jinja2
 import yaml
 
 
-def conda2def(conda_env_file: Path, output: Path, template_name: str = "conda2def.def"):
+def pip2def(reqs: list[str], output: Path, template_name: str = None):
+
+    template_name = template_name or "pip2def.def"
+
+    with open(output.with_suffix(".def"), "w") as def_file:
+        template_loader = jinja2.FileSystemLoader(
+            searchpath=Path(__file__).parent / "templates"
+        )
+        template_env = jinja2.Environment(loader=template_loader)
+        try:
+            template = template_env.get_template(template_name)
+        except jinja2.exceptions.TemplateNotFound:
+            print(
+                f"Error: Template {template_name} not found in templates directory! Remember it has to be relative to {Path(__file__).parent / 'templates'}."
+            )
+            print("Available templates are:")
+            for tpl in template_loader.list_templates():
+                print(tpl)
+            exit(1)
+
+        def_file.write(template.render({"reqs": reqs}))
+
+    return 0
+
+
+def conda2def(conda_env_file: Path, output: Path, template_name: str = None):
+
+    template_name = template_name or "conda2def.def"
+
     with open(conda_env_file, "r") as f:
         conda_env = yaml.safe_load(f)
         env_name = conda_env["name"]
@@ -26,8 +54,8 @@ def conda2def(conda_env_file: Path, output: Path, template_name: str = "conda2de
                     f"Error: Template {template_name} not found in templates directory! Remember it has to be relative to {Path(__file__).parent / 'templates'}."
                 )
                 print("Available templates are:")
-                for template in template_loader.list_templates():
-                    print(template)
+                for template_name in template_loader.list_templates():
+                    print(template_name)
                 exit(1)
             def_file.write(
                 template.render(
@@ -44,21 +72,21 @@ def conda2def(conda_env_file: Path, output: Path, template_name: str = "conda2de
     return 0
 
 
-def def2sif(output_file_name: Path):
-    if output_file_name.exists():
-        confirmation = input(f"Remove existing image at {output_file_name}? (yes/No)")
+def def2sif(output: Path):
+    if output.exists():
+        confirmation = input(f"Remove existing image at {output}? (yes/No)")
         if confirmation.lower()[0] != "y":
             print("Exiting without creating the image.")
             exit(0)
         else:
-            os.remove(output_file_name)
+            os.remove(output)
 
     command = [
         "singularity",
         "build",
         "--fakeroot",
-        str(output_file_name),
-        str(output_file_name.with_suffix(".def")),
+        str(output),
+        str(output.with_suffix(".def")),
     ]
 
     print("Running command: ", " ".join(command))
@@ -71,9 +99,29 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Convert conda environment file to Singularity image file"
     )
-    parser.add_argument(
+    subparsers = parser.add_subparsers(
+        dest="command", required=True, help="Sub-command to run"
+    )
+
+    # Subparser for conda2sif
+    conda_parser = subparsers.add_parser(
+        "conda2sif", help="Convert conda environment file to Singularity image"
+    )
+    conda_parser.add_argument(
         "--env", "-e", help="Conda environment file (yaml)", type=Path, required=True
     )
+    conda_parser.set_defaults(func=conda2def)
+
+    # Subparser for pip2sif
+    pip_parser = subparsers.add_parser(
+        "pip2sif", help="Convert pip requirements file to Singularity image"
+    )
+    pip_parser.add_argument(
+        "--reqs", "-r", help="Pip requirements file (txt)", type=Path, required=True
+    )
+    pip_parser.set_defaults(func=pip2def)
+
+    # Common arguments for both subparsers
     parser.add_argument(
         "--output",
         "-o",
@@ -84,7 +132,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--template",
         help="Singularity definition template file (relative to the templates folder in this app's install directory)",
-        default="conda2def.def",
+        dest="template_name",
     )
     parser.add_argument(
         "--keep-def",
@@ -100,10 +148,15 @@ if __name__ == "__main__":
         type=Path,
     )
 
-    args = parser.parse_args()
+    args = vars(parser.parse_args())
 
-    output_file_name: Path = args.output
-    output_dir: Path = args.singularity_images
+    func = args.pop("func")
+    command = args.pop("command")
+
+    keep_def = args.pop("keep_def")
+
+    output_file_name: Path = args.pop("output")
+    output_dir: Path = args.pop("singularity_images")
 
     if not output_dir.is_dir():
         print(
@@ -128,7 +181,7 @@ if __name__ == "__main__":
 
         output_file_name = output_dir / output_file_name
 
-    def_success = conda2def(args.env, output_file_name, args.template)
+    def_success = func(**args, output=output_file_name)
 
     if def_success == 0:
         print(
@@ -143,7 +196,7 @@ if __name__ == "__main__":
     if sif_success == 0:
         print(f"Singularity image file created at {output_file_name}")
 
-        if not args.keep_def:
+        if not keep_def:
             os.remove(output_file_name.with_suffix(".def"))
     else:
         print(

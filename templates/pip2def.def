@@ -1,0 +1,5 @@
+Bootstrap: docker
+From: ghcr.io/astral-sh/uv:debian-slim
+
+%post
+    uv pip install --system {{ reqs }}
